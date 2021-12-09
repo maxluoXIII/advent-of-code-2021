@@ -3,37 +3,98 @@ use std::io::{self, BufRead};
 
 fn main() {
     let file = File::open("inputs/day3.txt").expect("Failed to open input file");
-    let mut counter = Vec::new();
+    let mut readings = Vec::new();
     for line in io::BufReader::new(file).lines() {
         let reading = line.expect("Could not read line");
-        
-        for (i, bit) in reading.char_indices() {
-            if counter.len() <= i {
-                counter.push((0, 0));
-            }
+        readings.push((reading.clone(), true, true));
+    }
 
+    let mut low_valid_count = readings.len();
+    let mut high_valid_count = readings.len();
+    let mut o2_rating = String::from("");
+    let mut co2_rating = String::from("");
+    let mut found_o2_rating = false;
+    let mut found_co2_rating = false;
+    for i in 0..readings[0].0.len() {
+        let mut low_counter = (0, 0);
+        let mut high_counter = (0, 0);
+        let mut low_indices = (Vec::new(), Vec::new());
+        let mut high_indices = (Vec::new(), Vec::new());
+
+        for (j, (reading, low_valid, high_valid)) in readings.iter().enumerate() {
+            let bit = reading.as_bytes()[i] as char;
             match bit {
-                '0' => counter[i].0 += 1,
-                '1' => counter[i].1 += 1,
+                '0' => {
+                    if *low_valid {
+                        low_counter.0 += 1;
+                        low_indices.0.push(j);
+                    }
+                    if *high_valid {
+                        high_counter.0 += 1;
+                        high_indices.0.push(j);
+                    }
+                },
+                '1' => {
+                    if *low_valid {
+                        low_counter.1 += 1;
+                        low_indices.1.push(j);
+                    }
+                    if *high_valid {
+                        high_counter.1 += 1;
+                        high_indices.1.push(j);
+                    }
+                },
                 default => panic!("Invalid bit: {}", default)
             }
         }
-    }
 
-    let mut gamma = String::from("");
-    let mut epsilon = String::from("");
-    for (zero_count, one_count) in counter {
-        if zero_count > one_count {
-            gamma += "0";
-            epsilon += "1";
+        if low_counter.0 <= low_counter.1 {
+            for idx in low_indices.1 {
+                readings[idx].1 = false;
+                low_valid_count -= 1;
+                if low_valid_count == 1 && !found_co2_rating {
+                    co2_rating = readings.iter().find(|(_, low_valid, _)| *low_valid).unwrap().0.clone();
+                    found_co2_rating = true;
+                }
+            }
         } else {
-            gamma += "1";
-            epsilon += "0";
+            for idx in low_indices.0 {
+                readings[idx].1 = false;
+                low_valid_count -= 1;
+                if low_valid_count == 1 && !found_co2_rating {
+                    co2_rating = readings.iter().find(|(_, low_valid, _)| *low_valid).unwrap().0.clone();
+                    found_co2_rating = true;
+                }
+            }
+        }
+
+        if high_counter.0 > high_counter.1 {
+            for idx in high_indices.1 {
+                readings[idx].2 = false;
+                high_valid_count -= 1;
+                if high_valid_count == 1 && !found_o2_rating {
+                    o2_rating = readings.iter().find(|(_, _, high_valid)| *high_valid).unwrap().0.clone();
+                    found_o2_rating = true;
+                }
+            }
+        } else {
+            for idx in high_indices.0 {
+                readings[idx].2 = false;
+                high_valid_count -= 1;
+                if high_valid_count == 1  && !found_o2_rating {
+                    o2_rating = readings.iter().find(|(_, _, high_valid)| *high_valid).unwrap().0.clone();
+                    found_o2_rating = true;
+                }
+            }
+        }
+
+        if found_co2_rating && found_o2_rating {
+            break;
         }
     }
 
-    let gamma_dec = isize::from_str_radix(&gamma, 2).expect("Unable to parse as binary");
-    let epsilon_dec = isize::from_str_radix(&epsilon, 2).expect("Unable to parse as binary");
+    let o2_dec = isize::from_str_radix(&o2_rating, 2).expect("Unable to parse as binary");
+    let co2_dec = isize::from_str_radix(&co2_rating, 2).expect("Unable to parse as binary");
 
-    println!("{} x {} = {}", gamma_dec, epsilon_dec, gamma_dec * epsilon_dec);
+    println!("{} x {} = {}", o2_dec, co2_dec, o2_dec * co2_dec);
 }
