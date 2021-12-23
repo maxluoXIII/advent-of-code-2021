@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 
 #[derive(PartialEq, Eq, Hash)]
-struct Point(u32, u32);
+struct Point(usize, usize);
 
 #[derive(PartialEq, Eq)]
 struct LineSegment {
@@ -21,55 +21,67 @@ impl LineSegment {
     fn is_vertical(&self) -> bool {
         self.start.0 == self.end.0
     }
+}
 
-    fn find_intersections(&self, other: &LineSegment) -> Vec<Point> {
-        let mut ret = Vec::new();
+struct Board {
+    tiles: Vec<Vec<usize>>
+}
 
-        if *self == *other {
-            return ret;
+impl Board {
+    fn new(x: usize, y: usize) -> Board {
+        let mut tiles = Vec::new();
+        tiles.resize(x, Vec::new());
+        for row in &mut tiles {
+            row.resize(y, 0);
         }
 
-        let self_max_x = cmp::max(self.start.0, self.end.0);
-        let self_min_x = cmp::min(self.start.0, self.end.0);
-        let self_max_y = cmp::max(self.start.1, self.end.1);
-        let self_min_y = cmp::min(self.start.1, self.end.1);
+        Board {tiles}
+    }
 
-        let oth_max_x = cmp::max(other.start.0, other.end.0);
-        let oth_min_x = cmp::min(other.start.0, other.end.0);
-        let oth_max_y = cmp::max(other.start.1, other.end.1);
-        let oth_min_y = cmp::min(other.start.1, other.end.1);
+    fn mark(&mut self, line: &LineSegment) {
+        if line.is_horizontal() {
+            let y = line.start.1;
+            let start = cmp::min(line.start.0, line.end.0);
+            let end = cmp::max(line.start.0, line.end.0);
+            for x in start ..= end {
+                self.tiles[x][y] += 1;
+            }
+        } else if line.is_vertical() {
+            let x = line.start.0;
+            let start = cmp::min(line.start.1, line.end.1);
+            let end = cmp::max(line.start.1, line.end.1);
+            for y in start ..= end {
+                self.tiles[x][y] += 1;
+            }
+        } else {
+            let x_iter: Box<dyn Iterator<Item = usize>> = if line.start.0 < line.end.0 {
+                Box::new(line.start.0 ..= line.end.0)
+            } else {
+                Box::new((line.end.0 ..= line.start.0).rev())
+            };
+            let y_iter: Box<dyn Iterator<Item = usize>> = if line.start.1 < line.end.1 {
+                Box::new(line.start.1 ..= line.end.1)
+            } else {
+                Box::new((line.end.1 ..= line.start.1).rev())
+            };
 
-        if self.is_horizontal() && other.is_horizontal() && self_min_y == oth_min_y {
-            for x in self_min_x..self_max_x {
-                if x >= oth_min_x && x <= oth_max_x {
-                    ret.push(Point(x, self.start.1));
+            for (x, y) in x_iter.zip(y_iter) {
+                self.tiles[x][y] += 1;
+            }
+        }
+    }
+
+    fn count_overlaps(&self) -> u32 {
+        let mut sum = 0;
+        for col in &self.tiles {
+            for count in col {
+                if *count >= 2 {
+                    sum += 1;
                 }
-            }
-        } else if self.is_vertical() && other.is_vertical() && self_min_x == oth_min_x {
-            for y in self_min_y..self_max_y {
-                if y >= oth_min_y && y <= oth_max_y {
-                    ret.push(Point(self.start.0, y));
-                }
-            }
-        } else if self.is_horizontal() && other.is_vertical() {
-            if oth_min_x >= self_min_x
-                && oth_min_x <= self_max_x
-                && self_min_y >= oth_min_y
-                && self_min_y <= oth_max_y
-            {
-                ret.push(Point(other.start.0, self.start.1));
-            }
-        } else if self.is_vertical() && other.is_horizontal() {
-            if self_min_x >= oth_min_x
-                && self_min_x <= oth_max_x
-                && oth_min_y >= self_min_y
-                && oth_min_y <= self_max_y
-            {
-                ret.push(Point(self.start.0, other.start.1));
             }
         }
 
-        ret
+        sum
     }
 }
 
@@ -78,43 +90,25 @@ fn main() {
     let line_regex =
         Regex::new(r"^(?P<p1x>\d+),(?P<p1y>\d+) -> (?P<p2x>\d+),(?P<p2y>\d+)$").unwrap();
     let mut lines = Vec::new();
+    let mut max_x = 0;
+    let mut max_y = 0;
     for line in io::BufReader::new(file).lines() {
         let line = line.unwrap();
         for cap in line_regex.captures_iter(&line) {
-            lines.push(LineSegment {
-                start: Point(
-                    cap.name("p1x").unwrap().as_str().parse::<u32>().unwrap(),
-                    cap.name("p1y").unwrap().as_str().parse::<u32>().unwrap(),
-                ),
-                end: Point(
-                    cap.name("p2x").unwrap().as_str().parse::<u32>().unwrap(),
-                    cap.name("p2y").unwrap().as_str().parse::<u32>().unwrap(),
-                ),
-            });
+            let p1x = cap.name("p1x").unwrap().as_str().parse::<usize>().unwrap();
+            let p1y = cap.name("p1y").unwrap().as_str().parse::<usize>().unwrap();
+            let p2x = cap.name("p2x").unwrap().as_str().parse::<usize>().unwrap();
+            let p2y = cap.name("p2y").unwrap().as_str().parse::<usize>().unwrap();
+            lines.push(LineSegment {start: Point(p1x, p1y), end: Point(p2x, p2y),});
+            max_x = cmp::max(cmp::max(max_x, p1x), p2x);
+            max_y = cmp::max(cmp::max(max_y, p1y), p2y);
         }
     }
 
-    let mut intersection_counts = HashMap::new();
-    for line1 in &lines {
-        for line2 in &lines {
-            let intersections = line1.find_intersections(line2);
-            for intersection in intersections {
-                let count = if let Some(stored_count) = intersection_counts.get(&intersection) {
-                    *stored_count
-                } else {
-                    0
-                };
-                intersection_counts.insert(intersection, count + 1);
-            }
-        }
+    let mut board = Board::new(max_x+1, max_y+1);
+    for line in lines {
+        board.mark(&line);
     }
 
-    // let mut overlap_count = 0;
-    // for (_, count) in intersection_counts {
-    //     if count >= 2 {
-    //         overlap_count += 1;
-    //     }
-    // }
-
-    println!("{}", intersection_counts.len());
+    println!("{}", board.count_overlaps());
 }
