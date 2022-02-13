@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::collections::VecDeque;
 
 fn get_smaller(idx: usize) -> usize {
     if 0 == idx {
@@ -38,17 +39,20 @@ impl Map {
         Ok(Map {elevations, num_cols, num_rows})
     }
 
-    fn get_risk_level(&self) -> u32 {
-        let mut risk_sum = 0;
-        for col in 0..self.num_cols {
-            for row in 0..self.num_rows {
+    fn get_basin_sizes(&self) -> Vec<u32> {
+        let mut basin_sizes = Vec::new();
+        
+        for row in 0..self.num_rows {
+            for col in 0..self.num_cols {
                 if self.is_low_point(col, row) {
-                    risk_sum += self.elevations[row][col] + 1;
+                    basin_sizes.push(self.get_basin_size(row, col));
                 }
             }
         }
 
-        risk_sum
+        basin_sizes.sort_unstable();
+        basin_sizes.reverse();
+        basin_sizes
     }
 
     fn is_low_point(&self, x: usize, y: usize) -> bool {
@@ -72,6 +76,51 @@ impl Map {
 
         ret
     }
+
+    fn get_basin_size(&self, lp_row: usize, lp_col: usize) -> u32 {
+        let mut visit_map = Vec::new();
+
+        for row in 0..self.num_rows {
+            let mut row_vec = Vec::new();
+            for col in 0..self.num_cols {
+                row_vec.push(9 == self.elevations[row][col]);
+            }
+            visit_map.push(row_vec);
+        }
+
+        let mut visit_queue = VecDeque::new();
+        visit_queue.push_back((lp_row, lp_col));
+        visit_map[lp_row][lp_col] = true;
+
+        let mut basin_size = 0;
+
+        while !visit_queue.is_empty() {
+            let (row, col) = visit_queue.pop_front().unwrap();
+            basin_size += 1;
+
+            if !visit_map[get_smaller(row)][col] {
+                visit_queue.push_back((get_smaller(row), col));
+                visit_map[get_smaller(row)][col] = true;
+            }
+
+            if !visit_map[row][get_smaller(col)] {
+                visit_queue.push_back((row, get_smaller(col)));
+                visit_map[row][get_smaller(col)] = true;
+            }
+
+            if !visit_map[get_bigger(self.num_rows, row)][col] {
+                visit_queue.push_back((get_bigger(self.num_rows, row), col));
+                visit_map[get_bigger(self.num_rows, row)][col] = true;
+            }
+
+            if !visit_map[row][get_bigger(self.num_cols, col)] {
+                visit_queue.push_back((row, get_bigger(self.num_cols, col)));
+                visit_map[row][get_bigger(self.num_cols, col)] = true;
+            }
+        }
+
+        basin_size
+    }
 }
 
 impl std::fmt::Display for Map {
@@ -94,5 +143,7 @@ fn main() {
     
     let map = Map::from_file(file).unwrap();
 
-    println!("{}", map.get_risk_level())
+    let basin_sizes = map.get_basin_sizes();
+
+    println!("{}", basin_sizes[0] * basin_sizes[1] * basin_sizes[2]);
 }
