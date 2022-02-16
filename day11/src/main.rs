@@ -11,7 +11,8 @@ struct OctoGrid {
     grid: Vec<Vec<Octopus>>,
     num_rows: usize,
     num_cols: usize,
-    flash_count: usize
+    flash_count: usize,
+    first_sync: usize
 }
 
 impl OctoGrid {
@@ -35,10 +36,10 @@ impl OctoGrid {
 
         let num_rows = grid.len();
         let num_cols = grid[0].len();
-        Ok(OctoGrid{grid, num_rows, num_cols, flash_count: 0})
+        Ok(OctoGrid{grid, num_rows, num_cols, flash_count: 0, first_sync: 0})
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> bool {
         for row in 0..self.grid.len() {
             for col in 0..self.grid[0].len() {
                 self.grid[row][col].flashed = false;
@@ -55,6 +56,15 @@ impl OctoGrid {
                 }
             }
         }
+
+        let mut is_synced = true;
+        for row in 0..self.grid.len() {
+            for col in 0..self.grid[0].len() {
+                is_synced = is_synced && self.grid[row][col].flashed;
+            }
+        }
+
+        is_synced
     }
 
     fn flash(&mut self, f_row: usize, f_col: usize) {
@@ -86,9 +96,11 @@ fn main() {
 
     let mut octo_grid = OctoGrid::new(file).unwrap();
 
-    for _ in 0..100 {
-        octo_grid.step();
+    let mut epoch = 0;
+    while !octo_grid.step() {
+        epoch += 1;
     }
+    println!("First sync in epoch {}", epoch + 1);
 
-    println!("{}", octo_grid.flash_count);
+    println!("{} flahes", octo_grid.flash_count);
 }
